@@ -5,12 +5,14 @@ class AuthController {
     try {
       const { username, password } = req.body;
       const user = await AuthService.register(username, password);
-      res.status(201).json(user);
+      
+      const { password: _, ...userWithoutPassword } = user.get({ plain: true });
+      
+      res.status(201).json(userWithoutPassword);
     } catch (error) {
       res.status(400).json({ message: error.message });
     }
   }
-
 
   static async login(req, res) {
     try {

@@ -9,15 +9,7 @@ let token;
 beforeAll(async () => {
   await sequelize.sync({ force: true });
 
-  const registerResponse = await request(app)
-    .post('/auth/register')
-    .send({ username: 'testuser', password: 'password' });
-
-  const loginResponse = await request(app)
-    .post('/auth/login')
-    .send({ username: 'testuser', password: 'password' });
-
-  token = loginResponse.body.token;
+  token = await authorizeUser();
 
   await Pokemon.bulkCreate([
     {
@@ -92,16 +84,20 @@ afterAll(async () => {
 describe('AuthController', () => {
   describe('POST /auth/register', () => {
     it('should register a new user', async () => {
-      const res = await request(app)
+      await request(app)
         .post('/auth/register')
         .send({
           username: 'newuser',
           password: 'password'
+        })
+        .expect(201)
+        .expect((res) => {
+          expect(res.body).toMatchObject({
+            id: expect.any(Number),
+            username: 'newuser',
+          });
+          expect(res.body).not.toHaveProperty('password');
         });
-
-      expect(res.statusCode).toEqual(201);
-      expect(res.body).toHaveProperty('id');
-      expect(res.body).toHaveProperty('username', 'newuser');
     });
 
     it('should return 400 if username already exists', async () => {
@@ -120,7 +116,7 @@ describe('AuthController', () => {
         });
 
       expect(res.statusCode).toEqual(400);
-      expect(res.body).toHaveProperty('message');
+      expect(res.body).toHaveProperty('message', 'Username already taken');
     });
   });
 
@@ -162,90 +158,112 @@ describe('AuthController', () => {
 
 describe('PokemonController', () => {
   it('should fetch all pokemons', async () => {
-    const res = await request(app)
+    await request(app)
       .get('/api/pokemons')
       .set('Authorization', `Bearer ${token}`)
-      .query({ page: 1, size: 10 });
-
-    expect(res.statusCode).toEqual(200);
-    expect(res.body).toHaveProperty('total');
-    expect(res.body).toHaveProperty('data');
-    expect(Array.isArray(res.body.data)).toBe(true);
+      .query({ page: 1, size: 10 })
+      .expect(200)
+      .expect((res) => {
+        expect(res.body).toHaveProperty('total');
+        expect(res.body).toHaveProperty('data');
+        expect(Array.isArray(res.body.data)).toBe(true);
+      });
   });
 
   it('should return 400 for invalid query parameters', async () => {
-    const res = await request(app)
+    await request(app)
       .get('/api/pokemons')
       .set('Authorization', `Bearer ${token}`)
-      .query({ page: 'invalid', size: 'invalid' });
-
-    expect(res.statusCode).toEqual(400);
-    expect(res.body).toHaveProperty('error', 'Invalid query parameters');
+      .query({ page: 'invalid', size: 'invalid' })
+      .expect(400)
+      .expect((res) => {
+        expect(res.body).toHaveProperty('error', 'Invalid query parameters');
+      });
   });
 
   it('should fetch a pokemon by ID', async () => {
     const pokemon = await Pokemon.findOne();
-    const res = await request(app)
+    await request(app)
       .get(`/api/pokemons/${pokemon.id}`)
-      .set('Authorization', `Bearer ${token}`);
-
-    expect(res.statusCode).toEqual(200);
-    expect(res.body).toHaveProperty('id', pokemon.id);
-    expect(res.body).toHaveProperty('name', pokemon.name);
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+      .expect((res) => {
+        expect(res.body).toHaveProperty('id', pokemon.id);
+        expect(res.body).toHaveProperty('name', pokemon.name);
+      });
   });
 
   it('should return 404 for a nonexistent pokemon ID', async () => {
-    const res = await request(app)
+    await request(app)
       .get('/api/pokemons/999999')
-      .set('Authorization', `Bearer ${token}`);
-
-    expect(res.statusCode).toEqual(404);
-    expect(res.body).toHaveProperty('error', 'Pokemon not found');
+      .set('Authorization', `Bearer ${token}`)
+      .expect(404)
+      .expect((res) => {
+        expect(res.body).toHaveProperty('error', 'Pokemon not found');
+      });
   });
 
   it('should fetch legendary pokemons', async () => {
-    const res = await request(app)
+    await request(app)
       .get('/api/legendary-pokemons')
-      .set('Authorization', `Bearer ${token}`);
-
-    expect(res.statusCode).toEqual(200);
-    expect(res.body).toHaveProperty('total');
-    expect(res.body).toHaveProperty('data');
-    expect(Array.isArray(res.body.data)).toBe(true);
-    res.body.data.forEach(pokemon => {
-      expect(pokemon).toHaveProperty('legendary', true);
-    });
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+      .expect((res) => {
+        expect(res.body).toHaveProperty('total', expect.any(Number));
+        expect(res.body).toHaveProperty('data', expect.any(Array));
+        res.body.data.forEach(pokemon => {
+          expect(pokemon.legendary).toBe(true);
+        });
+      });
   });
 
   it('should return 401 for missing authorization token', async () => {
-    const res = await request(app)
-      .get('/api/pokemons');
-
-    expect(res.statusCode).toEqual(401);
-    expect(res.body).toHaveProperty('error', 'Unauthorized');
+    await request(app)
+      .get('/api/pokemons')
+      .expect(401)
+      .expect((res) => {
+        expect(res.body).toHaveProperty('error', 'Unauthorized');
+      });
   });
 
   it('should return 400 for invalid query parameters in legendary pokemons', async () => {
-    const res = await request(app)
+    await request(app)
       .get('/api/legendary-pokemons')
       .set('Authorization', `Bearer ${token}`)
-      .query({ page: 'invalid', size: 'invalid' });
-
-    expect(res.statusCode).toEqual(400);
-    expect(res.body).toHaveProperty('error', 'Invalid query parameters');
+      .query({ page: 'invalid', size: 'invalid' })
+      .expect(400)
+      .expect((res) => {
+        expect(res.body).toHaveProperty('error', 'Invalid query parameters');
+      });
   });
 
   it('should return 200 with empty data if no legendary pokemons are available', async () => {
     await Pokemon.destroy({ where: { legendary: true } });
 
-    const res = await request(app)
+    await request(app)
       .get('/api/legendary-pokemons')
-      .set('Authorization', `Bearer ${token}`);
-
-    expect(res.statusCode).toEqual(200);
-    expect(res.body).toHaveProperty('total', 0);
-    expect(res.body).toHaveProperty('data');
-    expect(Array.isArray(res.body.data)).toBe(true);
-    expect(res.body.data.length).toBe(0);
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+      .expect((res) => {
+        expect(res.body).toHaveProperty('total', 0);
+        expect(res.body).toHaveProperty('data');
+        expect(Array.isArray(res.body.data)).toBe(true);
+        expect(res.body.data.length).toBe(0);
+      });
   });
 });
+
+/**
+ * @returns Promise<string>
+ */
+async function authorizeUser() {
+  await request(app)
+    .post('/auth/register')
+    .send({ username: 'testuser', password: 'password' });
+
+  const loginResponse = await request(app)
+    .post('/auth/login')
+    .send({ username: 'testuser', password: 'password' });
+
+  return loginResponse.body.token;
+}

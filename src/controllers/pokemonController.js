@@ -1,10 +1,12 @@
 const PokemonService = require('../services/pokemonService');
+const { querySchema } = require('./queryDto')
 
 class PokemonController {
   static async getAllPokemons(req, res) {
     try {
-      const { page, size, filter } = req.query;
-      if ((page && isNaN(page)) || (size && isNaN(size))) {
+      const { page, size, filter, error } = querySchema.safeParse(req.query);
+      if (error) {
+        console.log('%o', error)
         return res.status(400).json({ error: 'Invalid query parameters' });
       }
       const pokemons = await PokemonService.getAllPokemons(page, size, filter);
@@ -31,8 +33,8 @@ class PokemonController {
 
   static async getLegendaryPokemons(req, res) {
     try {
-      const { page, size } = req.query;
-      if ((page && isNaN(page)) || (size && isNaN(size))) {
+      const { page, size, filter, error } = querySchema.safeParse(req.query);
+      if (error) {
         return res.status(400).json({ error: 'Invalid query parameters' });
       }
       const pokemons = await PokemonService.getLegendaryPokemons(page, size);
