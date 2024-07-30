@@ -10,15 +10,15 @@ beforeAll(async () => {
   await sequelize.sync({ force: true });
 
   // Criação de um usuário de teste e login para obter o token
-  await request(app)
+  const registerResponse = await request(app)
     .post('/auth/register')
     .send({ username: 'testuser', password: 'password' });
 
-  const response = await request(app)
+  const loginResponse = await request(app)
     .post('/auth/login')
     .send({ username: 'testuser', password: 'password' });
 
-  token = response.body.token;
+  token = loginResponse.body.token;
 
   // Criação de alguns dados de teste
   await Pokemon.bulkCreate([
@@ -85,6 +85,81 @@ beforeAll(async () => {
       cp39: 3800
     }
   ]);
+});
+
+afterAll(async () => {
+  await sequelize.close();
+});
+
+describe('AuthController', () => {
+  describe('POST /auth/register', () => {
+    it('should register a new user', async () => {
+      const res = await request(app)
+        .post('/auth/register')
+        .send({
+          username: 'newuser',
+          password: 'password'
+        });
+
+      expect(res.statusCode).toEqual(201);
+      expect(res.body).toHaveProperty('id');
+      expect(res.body).toHaveProperty('username', 'newuser');
+    });
+
+    it('should return 400 if username already exists', async () => {
+      await request(app)
+        .post('/auth/register')
+        .send({
+          username: 'existinguser',
+          password: 'password'
+        });
+
+      const res = await request(app)
+        .post('/auth/register')
+        .send({
+          username: 'existinguser',
+          password: 'password'
+        });
+
+      expect(res.statusCode).toEqual(400);
+      expect(res.body).toHaveProperty('message');
+    });
+  });
+
+  describe('POST /auth/login', () => {
+    beforeAll(async () => {
+      await request(app)
+        .post('/auth/register')
+        .send({
+          username: 'loginuser',
+          password: 'password'
+        });
+    });
+
+    it('should login an existing user', async () => {
+      const res = await request(app)
+        .post('/auth/login')
+        .send({
+          username: 'loginuser',
+          password: 'password'
+        });
+
+      expect(res.statusCode).toEqual(200);
+      expect(res.body).toHaveProperty('token');
+    });
+
+    it('should return 401 for invalid credentials', async () => {
+      const res = await request(app)
+        .post('/auth/login')
+        .send({
+          username: 'loginuser',
+          password: 'wrongpassword'
+        });
+
+      expect(res.statusCode).toEqual(401);
+      expect(res.body).toHaveProperty('message');
+    });
+  });
 });
 
 describe('PokemonController', () => {
@@ -176,8 +251,3 @@ describe('PokemonController', () => {
     expect(res.body.data.length).toBe(0);
   });
 });
-
-afterAll(async () => {
-  await sequelize.close();
-});
-
