@@ -6,19 +6,16 @@ const Pokemon = require('./src/models/pokemonModel');
 
 async function importData() {
   try {
-    // Sincronizar o banco de dados
+    
     await sequelize.sync({ force: true });
 
-    // Definir o caminho do arquivo Excel
     const filePath = path.resolve(__dirname, 'PokemonGO.xlsx');
     
-    // Ler o arquivo Excel
     const workbook = XLSX.readFile(filePath);
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
     const data = XLSX.utils.sheet_to_json(sheet);
 
-    // Função para validar e converter valores
     const toBoolean = (value) => value === 1 ? true : false;
     const toInteger = (value) => {
       if (value === 'evolved') return 3;
@@ -26,7 +23,6 @@ async function importData() {
       return isNaN(value) ? 0 : parseInt(value, 10);
     };
 
-    // Mapear os dados para o formato adequado para o modelo
     const pokemons = data.map(row => ({
       name: row['Name'],
       pokedexNumber: toInteger(row['Pokedex Number']),
@@ -59,10 +55,8 @@ async function importData() {
       cp39: toInteger(row['100% CP @ 39']),
     }));
 
-    // Definir tamanho do lote
     const BATCH_SIZE = 165;
 
-    // Inserir os dados em lotes
     for (let i = 0; i < pokemons.length; i += BATCH_SIZE) {
       const batch = pokemons.slice(i, i + BATCH_SIZE);
       console.log(`Importando lote ${Math.floor(i / BATCH_SIZE) + 1}`);
@@ -74,7 +68,7 @@ async function importData() {
       } catch (error) {
         console.error(`Erro ao importar lote ${Math.floor(i / BATCH_SIZE) + 1}:`, error);
         console.error(`Valores do lote problemático: ${JSON.stringify(batch)}`);
-        break; // Parar o processo de importação se houver um erro
+        break; 
       }
     }
 

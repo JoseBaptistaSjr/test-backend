@@ -9,7 +9,6 @@ let token;
 beforeAll(async () => {
   await sequelize.sync({ force: true });
 
-  // Criação de um usuário de teste e login para obter o token
   const registerResponse = await request(app)
     .post('/auth/register')
     .send({ username: 'testuser', password: 'password' });
@@ -20,7 +19,6 @@ beforeAll(async () => {
 
   token = loginResponse.body.token;
 
-  // Criação de alguns dados de teste
   await Pokemon.bulkCreate([
     {
       name: 'Ivysaur',

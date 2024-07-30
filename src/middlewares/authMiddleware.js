@@ -9,7 +9,7 @@ function authenticateToken(req, res, next) {
     req.user = user;
     next();
   } catch (error) {
-    console.error('Error verifying token:', error); // Adicione isso para depuração
+    console.error('Error verifying token:', error); 
     return res.status(403).json({ error: 'Forbidden' });
   }
 }
